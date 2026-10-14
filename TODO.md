@@ -17,9 +17,9 @@ To check on the phone:
 
 ## Features
 - [x] Import `.wastickers` packs (zip of webp stickers + title/author/tray): main screen menu > Import pack, or open the file from a file manager / share it to the app. Stickers are copied as-is (no re-encode) and get the default emoji; invalid ones are skipped and listed.
-- [ ] Export a pack as `.wastickers` (backup / share)
+- [x] Export a pack as `.wastickers`: pack screen menu > Export. Saved wherever you choose (round-trip with import checked: identical stickers).
 - [ ] Pinch-zoom in the eraser / restore brush
 - [ ] Video input (MP4 to animated sticker, with trim)
 - [ ] Bundled offline background removal as a fallback (people only)
 - [ ] Batch import (pick several images at once)
-- [ ] Signed release build
+- [x] Signed release build: `./gradlew.bat assembleRelease` -> `app/build/outputs/apk/release/app-release.apk`, copied to `dist/StickerMaker-release.apk`. Key: `release.keystore` + `keystore.properties` in the project root (git-ignored). BACK THESE UP: without them future updates can't install over this version.

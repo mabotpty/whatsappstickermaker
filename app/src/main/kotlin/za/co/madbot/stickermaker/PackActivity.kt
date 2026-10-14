@@ -21,6 +21,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class PackActivity : AppCompatActivity() {
     companion object {
@@ -34,6 +36,14 @@ class PackActivity : AppCompatActivity() {
 
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) edit(uri, null)
+    }
+    private val exportPack = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri != null) {
+            busy("Exporting...", { _ ->
+                withContext(Dispatchers.IO) { PackExporter.export(this@PackActivity, store, pack, uri) }
+                Toast.makeText(this, "Exported ${pack.stickers.size} stickers", Toast.LENGTH_SHORT).show()
+            })
+        }
     }
     private val addToWhatsApp = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val err = r.data?.getStringExtra("validation_error")
@@ -91,7 +101,8 @@ class PackActivity : AppCompatActivity() {
         add.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         add.isEnabled = pack.isReady
         menu.add(0, 2, 1, "Rename pack")
-        menu.add(0, 3, 2, "Delete pack")
+        menu.add(0, 4, 2, "Export (.wastickers)")
+        menu.add(0, 3, 3, "Delete pack")
         return true
     }
 
@@ -103,6 +114,8 @@ class PackActivity : AppCompatActivity() {
                 if (intent != null) addToWhatsApp.launch(intent)
             }
             2 -> rename()
+            4 -> if (pack.stickers.isEmpty()) Toast.makeText(this, "Nothing to export yet", Toast.LENGTH_SHORT).show()
+                 else exportPack.launch(PackExporter.suggestedName(pack))
             3 -> AlertDialog.Builder(this).setTitle("Delete \"${pack.name}\"?").setMessage("All its stickers will be removed.")
                 .setPositiveButton("Delete") { _, _ -> store.delete(pack.id); finish() }
                 .setNegativeButton("Cancel", null).show()
