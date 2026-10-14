@@ -111,6 +111,24 @@ class PackStore(private val ctx: Context) {
         save(p)
     }
 
+    /** Adds an already-valid WebP as-is (no re-encode). Call [finishImport] when done. */
+    fun addImported(p: StickerPack, webp: ByteArray, preview: Bitmap, emojis: List<String>, index: Int) {
+        val d = dir(p.id)
+        val item = StickerItem("s${System.currentTimeMillis()}_$index.webp", emojis)
+        File(d, item.file).writeBytes(webp)
+        File(d, item.thumbFile).outputStream().use {
+            Bitmap.createScaledBitmap(preview, 256, 256, true).compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+        p.stickers.add(item)
+    }
+
+    /** Uses [trayPng] as the tray icon if given, otherwise builds one from the first sticker. */
+    fun finishImport(p: StickerPack, trayPng: ByteArray?) {
+        if (trayPng != null) File(dir(p.id), p.trayFile).writeBytes(trayPng)
+        else p.stickers.firstOrNull()?.let { writeTray(p, it) }
+        save(p)
+    }
+
     fun removeSticker(p: StickerPack, s: StickerItem) {
         val d = dir(p.id)
         File(d, s.file).delete()

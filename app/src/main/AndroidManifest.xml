@@ -30,6 +30,15 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
+            <!-- .wastickers packs: opened from a file manager, or shared from another sticker app -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/x-wastickers" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
         <activity android:name=".PackActivity" android:exported="false" />
         <activity android:name=".EditorActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />

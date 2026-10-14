@@ -1,6 +1,9 @@
 package za.co.madbot.stickermaker
 
 import android.content.Intent
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
@@ -30,6 +33,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var empty: View
     private var packs: List<StickerPack> = emptyList()
     private var pendingUri: Uri? = null
+    private var pendingImport: Uri? = null
+
+    private val importPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importPack(uri)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,11 +75,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menu.add(0, 1, 0, "New pack").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        menu.add(0, 2, 1, "Import pack (.wastickers)").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == 1) newPackDialog()
+        if (item.itemId == 2) importPicker.launch(arrayOf("*/*"))
         return true
     }
 
@@ -83,14 +93,40 @@ class MainActivity : AppCompatActivity() {
 
     @Suppress("DEPRECATION")
     private fun handleShare(i: Intent?) {
-        if (i?.action == Intent.ACTION_SEND && i.type?.startsWith("image/") == true) {
+        val type = i?.type ?: return
+        if (i.action == Intent.ACTION_SEND && type.startsWith("image/")) {
             pendingUri = i.getParcelableExtra(Intent.EXTRA_STREAM)
+        } else if (i.action == Intent.ACTION_SEND) {
+            pendingImport = i.getParcelableExtra(Intent.EXTRA_STREAM)
+        } else if (i.action == Intent.ACTION_VIEW) {
+            pendingImport = i.data
         }
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
+        pendingImport?.let { pendingImport = null; importPack(it) }
+    }
+
+    private fun importPack(uri: Uri) {
+        var result: ImportResult? = null
+        busy("Importing pack...", { _ ->
+            result = withContext(Dispatchers.IO) { PackImporter.import(this@MainActivity, uri, store) }
+        }, { ok ->
+            val r = result
+            if (ok && r != null) {
+                refresh()
+                if (r.skipped.isEmpty()) {
+                    Toast.makeText(this, "Imported ${r.pack.stickers.size} stickers", Toast.LENGTH_SHORT).show()
+                    open(r.pack)
+                } else {
+                    AlertDialog.Builder(this).setTitle("Imported ${r.pack.stickers.size} stickers")
+                        .setMessage("Skipped ${r.skipped.size}:\n" + r.skipped.joinToString("\n"))
+                        .setPositiveButton("Open pack") { _, _ -> open(r.pack) }.show()
+                }
+            }
+        })
     }
 
     private fun refresh() {
