@@ -28,8 +28,9 @@ Java_za_co_madbot_stickermaker_WebpNative_encodeAnimated(
     WebPAnimEncoderOptions opts;
     if (!WebPAnimEncoderOptionsInit(&opts)) return nullptr;
     opts.anim_params.loop_count = 0;
-    opts.allow_mixed = 1;
-    opts.minimize_size = 1;
+    // Lossy only and no exhaustive size search: both make encoding many times slower.
+    opts.allow_mixed = 0;
+    opts.minimize_size = 0;
     WebPAnimEncoder *enc = WebPAnimEncoderNew(w, h, &opts);
     if (!enc) return nullptr;
 
@@ -41,6 +42,7 @@ Java_za_co_madbot_stickermaker_WebpNative_encodeAnimated(
     config.alpha_quality = quality;
     config.alpha_compression = 1;
     config.exact = 0;
+    config.thread_level = 1;
     if (!WebPValidateConfig(&config)) { WebPAnimEncoderDelete(enc); return nullptr; }
 
     jint *delays = env->GetIntArrayElements(delaysArr, nullptr);

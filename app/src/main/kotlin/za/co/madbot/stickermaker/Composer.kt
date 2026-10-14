@@ -100,6 +100,7 @@ object StickerEncoder {
     const val ANIMATED_MAX = 500 * 1024
     private const val MAX_DURATION_MS = 9500
     private const val MIN_DELAY_MS = 20
+    private const val START_FRAMES = 60
 
     fun encodeStatic(b: Bitmap): ByteArray {
         var q = 95
@@ -124,12 +125,26 @@ object StickerEncoder {
             if (total + d > MAX_DURATION_MS && fr.isNotEmpty()) break
             fr.add(frames[i]); dl.add(d); total += d
         }
-        val qualities = intArrayOf(75, 55, 35)
+        // Start from a sane frame budget: 100+ frame encodes are slow and rarely fit in 500 KB anyway.
+        while (fr.size > START_FRAMES) {
+            val nf = ArrayList<Bitmap>()
+            val nd = ArrayList<Int>()
+            var i = 0
+            while (i < fr.size) {
+                nf.add(fr[i])
+                nd.add(dl[i] + if (i + 1 < fr.size) dl[i + 1] else 0)
+                i += 2
+            }
+            fr = nf; dl = nd
+        }
+        val qualities = intArrayOf(70, 45, 25)
         var lastSize = 0
         for (round in 0 until 3) {
             for (q in qualities) {
                 progress("Encoding ${fr.size} frames (quality $q)...")
+                val t0 = android.os.SystemClock.uptimeMillis()
                 val bytes = encode(fr, dl, q)
+                android.util.Log.i("StickerEncoder", "${fr.size} frames q=$q -> ${bytes.size / 1024} KB in ${android.os.SystemClock.uptimeMillis() - t0} ms")
                 lastSize = bytes.size
                 if (bytes.size <= ANIMATED_MAX) return bytes
             }
