@@ -17,7 +17,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.button.MaterialButton
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.FrameLayout
 import java.io.File
 
@@ -25,7 +27,7 @@ import java.io.File
 class MainActivity : AppCompatActivity() {
     private lateinit var store: PackStore
     private lateinit var list: RecyclerView
-    private lateinit var empty: TextView
+    private lateinit var empty: View
     private var packs: List<StickerPack> = emptyList()
     private var pendingUri: Uri? = null
 
@@ -43,24 +45,34 @@ class MainActivity : AppCompatActivity() {
             layoutManager = LinearLayoutManager(context)
             adapter = Adapter()
             clipToPadding = false
-            setPadding(0, 0, 0, dp(96))
+            setPadding(0, 0, 0, dp(16))
         }
         col.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(col)
-        empty = TextView(this).apply {
-            text = "No packs yet.\nTap New pack to create one."
+        empty = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            textSize = 16f
+            addView(TextView(context).apply { text = "No packs yet"; textSize = 16f; gravity = Gravity.CENTER })
+            addView(
+                MaterialButton(context).apply {
+                    text = "Create your first pack"
+                    setOnClickListener { newPackDialog() }
+                },
+                LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(16) },
+            )
         }
         root.addView(empty, FrameLayout.LayoutParams(-1, -1))
-        root.addView(
-            ExtendedFloatingActionButton(this).apply {
-                text = "New pack"
-                setOnClickListener { newPackDialog() }
-            },
-            FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(16), dp(16)) },
-        )
         setContentView(root)
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menu.add(0, 1, 0, "New pack").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == 1) newPackDialog()
+        return true
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -88,30 +100,47 @@ class MainActivity : AppCompatActivity() {
         supportActionBar?.subtitle = if (pendingUri != null) "Pick a pack for the shared image" else null
     }
 
+    /** Custom dialog: the primary action is a big filled button, so it cannot be mistaken for anything behind it. */
     private fun newPackDialog() {
         val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
-        val name = EditText(this).apply { hint = "Pack name" }
-        val pub = EditText(this).apply { hint = "Author"; setText(prefs.getString("publisher", "")) }
+        val name = EditText(this).apply { hint = "Pack name"; setSingleLine() }
+        val pub = EditText(this).apply { hint = "Author"; setText(prefs.getString("publisher", "")); setSingleLine() }
         val anim = Switch(this).apply { text = "Animated pack"; setPadding(0, dp(12), 0, 0) }
         val note = TextView(this).apply {
             text = "WhatsApp packs are either all static or all animated. Add 3 to 30 stickers."
             textSize = 12f
         }
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(8), dp(24), 0)
-            addView(name); addView(pub); addView(anim); addView(note)
-        }
-        AlertDialog.Builder(this).setTitle("New pack").setView(box)
-            .setPositiveButton("Create") { _, _ ->
+        val title = TextView(this).apply { text = "New sticker pack"; textSize = 20f; setPadding(0, 0, 0, dp(8)) }
+        lateinit var dlg: AlertDialog
+        val create = MaterialButton(this).apply {
+            text = "Create pack"
+            setOnClickListener {
                 val n = name.text.toString().trim()
+                if (n.isEmpty()) { name.error = "Give the pack a name"; return@setOnClickListener }
                 val p = pub.text.toString().trim().ifEmpty { "Me" }
-                if (n.isEmpty()) { Toast.makeText(this, "Give the pack a name", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
                 prefs.edit().putString("publisher", p).apply()
                 val pack = store.create(n.take(128), p.take(128), anim.isChecked)
+                dlg.dismiss()
                 open(pack)
             }
-            .setNegativeButton("Cancel", null).show()
+        }
+        val cancel = MaterialButton(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
+            text = "Cancel"
+            setOnClickListener { dlg.dismiss() }
+        }
+        val buttons = LinearLayout(this).apply {
+            gravity = Gravity.END
+            setPadding(0, dp(16), 0, 0)
+            addView(cancel)
+            addView(create, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(8) })
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(20), dp(24), dp(16))
+            addView(title); addView(name); addView(pub); addView(anim); addView(note); addView(buttons)
+        }
+        dlg = AlertDialog.Builder(this).setView(box).create()
+        dlg.show()
     }
 
     private fun open(p: StickerPack) {

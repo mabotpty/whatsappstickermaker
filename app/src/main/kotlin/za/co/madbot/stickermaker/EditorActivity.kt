@@ -25,6 +25,8 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.IdentityHashMap
@@ -375,19 +377,23 @@ class EditorActivity : AppCompatActivity() {
             showError("Pack is full", "A pack holds at most ${PackStore.MAX_STICKERS} stickers.")
             return
         }
-        askEmojis(existing?.emojis ?: listOf("😀")) { emojis ->
-            busy("Encoding sticker...", { update ->
-                val (bytes, preview) = withContext(Dispatchers.Default) {
-                    val comp = frames.map { Composer.compose(it, outline, texts) }
-                    val bytes = if (pack.animated) StickerEncoder.encodeAnimated(comp, delays) { m -> update(m) }
-                    else StickerEncoder.encodeStatic(comp[0])
-                    bytes to comp[0]
+        // Keep the emoji of a sticker being edited; new stickers get the default (changeable from the pack screen).
+        val emojis = existing?.emojis ?: listOf(DEFAULT_EMOJI)
+        busy("Encoding sticker...", { update ->
+            val (bytes, preview) = withContext(Dispatchers.Default) {
+                val job = coroutineContext[Job]
+                val comp = frames.map { Composer.compose(it, outline, texts) }
+                val bytes = if (pack.animated) {
+                    StickerEncoder.encodeAnimated(comp, delays, { job?.isCancelled == true }) { m -> update(m) }
+                } else {
+                    StickerEncoder.encodeStatic(comp[0])
                 }
-                withContext(Dispatchers.IO) { store.addSticker(pack, bytes, preview, emojis, replaceFile) }
-                toast("Saved (${bytes.size / 1024} KB)")
-                setResult(RESULT_OK)
-                finish()
-            })
-        }
+                bytes to comp[0]
+            }
+            withContext(Dispatchers.IO) { store.addSticker(pack, bytes, preview, emojis, replaceFile) }
+            toast("Saved (${bytes.size / 1024} KB)")
+            setResult(RESULT_OK)
+            finish()
+        })
     }
 }

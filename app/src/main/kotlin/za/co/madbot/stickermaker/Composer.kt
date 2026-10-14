@@ -115,7 +115,7 @@ object StickerEncoder {
         }
     }
 
-    fun encodeAnimated(frames: List<Bitmap>, delays: List<Int>, progress: (String) -> Unit): ByteArray {
+    fun encodeAnimated(frames: List<Bitmap>, delays: List<Int>, cancelled: () -> Boolean, progress: (String) -> Unit): ByteArray {
         // Clamp delays and cut to the maximum duration.
         var fr = ArrayList<Bitmap>()
         var dl = ArrayList<Int>()
@@ -141,6 +141,7 @@ object StickerEncoder {
         var lastSize = 0
         for (round in 0 until 3) {
             for (q in qualities) {
+                if (cancelled()) throw java.util.concurrent.CancellationException("Encoding cancelled")
                 progress("Encoding ${fr.size} frames (quality $q)...")
                 val t0 = android.os.SystemClock.uptimeMillis()
                 val bytes = encode(fr, dl, q)
