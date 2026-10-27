@@ -37,6 +37,15 @@ class PackActivity : AppCompatActivity() {
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) edit(uri, null)
     }
+    private val pickIcon = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            busy("Setting pack icon...", { _ ->
+                withContext(Dispatchers.IO) { store.setTrayFromUri(pack, uri) }
+                Toast.makeText(this, "Pack icon updated", Toast.LENGTH_SHORT).show()
+                onResume()
+            })
+        }
+    }
     private val exportPack = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null) {
             busy("Exporting...", { _ ->
@@ -89,7 +98,8 @@ class PackActivity : AppCompatActivity() {
         super.onResume()
         store.get(pack.id)?.let { pack = it } ?: run { finish(); return }
         supportActionBar?.title = pack.name
-        info.text = (if (pack.animated) "Animated pack. " else "Static pack. ") +
+        supportActionBar?.subtitle = "by ${pack.publisher}"
+        info.text = (if (pack.animated) "" else "Static pack. ") +
             if (pack.isReady) "${pack.stickers.size}/${PackStore.MAX_STICKERS} stickers - ready to add to WhatsApp."
             else "${pack.stickers.size}/${PackStore.MAX_STICKERS} stickers - add at least ${PackStore.MIN_STICKERS} to enable WhatsApp."
         grid.adapter?.notifyDataSetChanged()
@@ -100,7 +110,8 @@ class PackActivity : AppCompatActivity() {
         val add = menu.add(0, 1, 0, "Add to WhatsApp")
         add.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         add.isEnabled = pack.isReady
-        menu.add(0, 2, 1, "Rename pack")
+        menu.add(0, 2, 1, "Edit pack (name, author)")
+        menu.add(0, 5, 1, "Change pack icon")
         menu.add(0, 4, 2, "Export (.wastickers)")
         menu.add(0, 3, 3, "Delete pack")
         return true
@@ -113,7 +124,8 @@ class PackActivity : AppCompatActivity() {
                 val intent = WhatsApp.buildIntent(this, pack) { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                 if (intent != null) addToWhatsApp.launch(intent)
             }
-            2 -> rename()
+            2 -> editPack()
+            5 -> pickIcon.launch("image/*")
             4 -> if (pack.stickers.isEmpty()) Toast.makeText(this, "Nothing to export yet", Toast.LENGTH_SHORT).show()
                  else exportPack.launch(PackExporter.suggestedName(pack))
             3 -> AlertDialog.Builder(this).setTitle("Delete \"${pack.name}\"?").setMessage("All its stickers will be removed.")
@@ -123,13 +135,22 @@ class PackActivity : AppCompatActivity() {
         return true
     }
 
-    private fun rename() {
-        val input = EditText(this).apply { setText(pack.name); setSelection(text.length) }
-        val box = LinearLayout(this).apply { setPadding(dp(24), dp(8), dp(24), 0); addView(input, LinearLayout.LayoutParams(-1, -2)) }
-        AlertDialog.Builder(this).setTitle("Rename pack").setView(box)
-            .setPositiveButton("OK") { _, _ ->
-                val n = input.text.toString().trim()
-                if (n.isNotEmpty()) { pack.name = n.take(128); store.save(pack); onResume() }
+    /** Name and author (the author is remembered as the default for new packs). */
+    private fun editPack() {
+        val name = EditText(this).apply { hint = "Pack name"; setText(pack.name); setSingleLine() }
+        val author = EditText(this).apply { hint = "Author"; setText(pack.publisher); setSingleLine() }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+            addView(name, LinearLayout.LayoutParams(-1, -2))
+            addView(author, LinearLayout.LayoutParams(-1, -2))
+        }
+        AlertDialog.Builder(this).setTitle("Edit pack").setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                if (name.text.isBlank()) { Toast.makeText(this, "The pack needs a name", Toast.LENGTH_SHORT).show(); return@setPositiveButton }
+                store.update(pack, name.text.toString(), author.text.toString())
+                if (author.text.isNotBlank()) getSharedPreferences("prefs", MODE_PRIVATE).edit().putString("publisher", author.text.toString().trim()).apply()
+                onResume()
             }.setNegativeButton("Cancel", null).show()
     }
 
@@ -144,11 +165,11 @@ class PackActivity : AppCompatActivity() {
 
     private fun stickerMenu(s: StickerItem) {
         AlertDialog.Builder(this).setTitle(s.emojis.joinToString(" "))
-            .setItems(arrayOf("Edit", "Change emoji", "Use as tray icon", "Delete")) { _, which ->
+            .setItems(arrayOf("Edit", "Change emoji", "Use as pack icon", "Delete")) { _, which ->
                 when (which) {
                     0 -> edit(Uri.fromFile(File(store.dir(pack.id), s.file)), s.file)
                     1 -> askEmojis(s.emojis) { store.updateEmojis(pack, s, it); onResume() }
-                    2 -> { store.setTray(pack, s); Toast.makeText(this, "Tray icon updated", Toast.LENGTH_SHORT).show() }
+                    2 -> { store.setTray(pack, s); Toast.makeText(this, "Pack icon updated", Toast.LENGTH_SHORT).show() }
                     3 -> { store.removeSticker(pack, s); onResume() }
                 }
             }.show()

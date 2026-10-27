@@ -24,6 +24,9 @@ To check on the phone:
 - [ ] Batch import (pick several images at once)
 - [x] Signed release build: `./gradlew.bat assembleRelease` -> `app/build/outputs/apk/release/app-release.apk`, copied to `dist/StickerMaker-release.apk`. Key: `release.keystore` + `keystore.properties` in the project root (git-ignored). BACK THESE UP: without them future updates can't install over this version.
 
+- [x] New packs are always animated, optional pack icon, edit name and author, Remove BG sensitivity slider (keep less / keep more).
+  Not yet exercised end to end on a device: the ML Kit model does not download on the emulator. Unit-tested only (SensitivityTest).
+
 ## Parity with the desktop app (`whatsappstickermaker-desktop`, see docs/SPEC.md)
 Shared: limits, pack format, `.wastickers` import/export, editing tools, encoding strategy, UX conventions.
 Only on desktop for now: multi-file add (batch), eraser zoom/pan (= the two Features above), drag stickers to reorder, faster encodes.

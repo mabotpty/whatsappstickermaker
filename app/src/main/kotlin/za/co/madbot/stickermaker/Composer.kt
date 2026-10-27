@@ -95,6 +95,86 @@ object Composer {
 }
 
 /**
+ * Remove-background sensitivity: v from -100 (keep less) to +100 (keep more); 0 is the model output.
+ * The model's mask is soft, so thin text and fine edges can come out semi-transparent; "keep more" fixes that.
+ * Same curve as the desktop app (docs/SPEC.md).
+ */
+object Sensitivity {
+    const val MAX_GAIN = 5
+    const val MAX_CUT = 200
+    const val NOISE_FLOOR = 6
+
+    fun lut(v: Int): IntArray {
+        val cut = if (v < 0) -v / 100.0 * MAX_CUT else 0.0
+        val gain = if (v > 0) 1 + v / 100.0 * (MAX_GAIN - 1) else 1.0
+        return IntArray(256) { a ->
+            when {
+                v > 0 -> if (a < NOISE_FLOOR) 0 else minOf(255, (a * gain).toInt())
+                v < 0 -> maxOf(0, ((a - cut) * 255 / (255 - cut)).toInt())
+                else -> a
+            }
+        }
+    }
+
+    /** Alpha channel of a model result as bytes. */
+    fun maskOf(b: Bitmap): ByteArray {
+        val px = IntArray(b.width * b.height)
+        b.getPixels(px, 0, b.width, 0, 0, b.width, b.height)
+        return ByteArray(px.size) { (px[it] ushr 24).toByte() }
+    }
+
+    /**
+     * Second "keep more" signal for plain backgrounds: pixels whose colour clearly differs from the border colour count as
+     * foreground (brings back thin text the model scored as background). Null when the border is not one flat colour (photos,
+     * busy backgrounds), so those are left to the model alone. Same rules as the desktop app (docs/SPEC.md).
+     */
+    fun colourMask(px: IntArray, w: Int, h: Int): ByteArray? {
+        val r = 3
+        val ring = ArrayList<Int>()
+        for (y in 0 until h) for (x in 0 until w) {
+            if ((y < r || y >= h - r || x < r || x >= w - r) && (px[y * w + x] ushr 24) > 128) ring.add(px[y * w + x])
+        }
+        if (ring.size < 20) return null
+        fun med(shift: Int) = ring.map { (it shr shift) and 0xFF }.sorted()[ring.size / 2]
+        val br = med(16)
+        val bg = med(8)
+        val bb = med(0)
+        fun diff(p: Int) = maxOf(Math.abs(((p shr 16) and 0xFF) - br), Math.abs(((p shr 8) and 0xFF) - bg), Math.abs((p and 0xFF) - bb))
+        if (ring.count { diff(it) <= 24 } < ring.size * 0.85) return null
+        return ByteArray(w * h) { i ->
+            val d = diff(px[i])
+            (if (d <= 24) 0 else if (d >= 72) 255 else Math.round((d - 24) * 255 / 48.0).toInt()).toByte()
+        }
+    }
+
+    /** Weight of the colour signal for slider value v: nothing at or below 0, full from +50. */
+    fun colourWeight(v: Int) = if (v > 0) minOf(1.0, v / 50.0) else 0.0
+
+    /** alpha' = original alpha * max(curve(mask), colourMask * weight); RGB stays as in [px] (colours never degrade). */
+    fun applyPx(px: IntArray, mask: ByteArray, cm: ByteArray?, lut: IntArray, weight: Double): IntArray {
+        val out = IntArray(px.size)
+        for (i in px.indices) {
+            var a = lut[mask[i].toInt() and 0xFF]
+            if (cm != null && weight > 0) a = maxOf(a, Math.round((cm[i].toInt() and 0xFF) * weight).toInt())
+            out[i] = (((px[i] ushr 24) * a / 255) shl 24) or (px[i] and 0xFFFFFF)
+        }
+        return out
+    }
+
+    fun apply(src: Bitmap, mask: ByteArray, cm: ByteArray?, lut: IntArray, weight: Double): Bitmap {
+        val px = IntArray(src.width * src.height)
+        src.getPixels(px, 0, src.width, 0, 0, src.width, src.height)
+        return Bitmap.createBitmap(applyPx(px, mask, cm, lut, weight), src.width, src.height, Bitmap.Config.ARGB_8888)
+    }
+
+    fun colourMaskOf(src: Bitmap): ByteArray? {
+        val px = IntArray(src.width * src.height)
+        src.getPixels(px, 0, src.width, 0, 0, src.width, src.height)
+        return colourMask(px, src.width, src.height)
+    }
+}
+
+/**
  * WhatsApp wants every sticker in an animated pack to have 2+ frames (see docs/SPEC.md). A static image is saved as two
  * frames that differ by a few pixels: identical frames would be merged back into one by the encoder.
  */

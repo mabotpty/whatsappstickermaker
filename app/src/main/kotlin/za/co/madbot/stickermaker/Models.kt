@@ -19,6 +19,8 @@ data class StickerPack(
     var version: Int = 1,
     var trayFile: String = "tray.png",
     val stickers: MutableList<StickerItem> = mutableListOf(),
+    /** True once the user picked the pack icon themselves: adding stickers then no longer replaces it. */
+    var trayCustom: Boolean = false,
 ) {
     val isReady get() = stickers.size >= PackStore.MIN_STICKERS
 }
@@ -54,7 +56,7 @@ class PackStore(private val ctx: Context) {
             }
             StickerPack(
                 id, o.getString("name"), o.getString("publisher"), o.getBoolean("animated"),
-                o.getInt("version"), o.getString("tray"), items.toMutableList(),
+                o.getInt("version"), o.getString("tray"), items.toMutableList(), trayCustom = o.optBoolean("trayCustom", false),
             )
         } catch (e: Exception) {
             null
@@ -66,7 +68,7 @@ class PackStore(private val ctx: Context) {
         p.version++
         val o = JSONObject()
             .put("name", p.name).put("publisher", p.publisher).put("animated", p.animated)
-            .put("version", p.version).put("tray", p.trayFile)
+            .put("version", p.version).put("tray", p.trayFile).put("trayCustom", p.trayCustom)
             .put("stickers", JSONArray().also { arr ->
                 p.stickers.forEach { s ->
                     arr.put(JSONObject().put("file", s.file).put("emojis", JSONArray(s.emojis)))
@@ -79,7 +81,8 @@ class PackStore(private val ctx: Context) {
         ctx.contentResolver.notifyChange(StickerContentProvider.baseUri(), null)
     }
 
-    fun create(name: String, publisher: String, animated: Boolean): StickerPack {
+    /** New packs are animated: a static image is saved as a 2-frame animation (docs/SPEC.md). */
+    fun create(name: String, publisher: String, animated: Boolean = true): StickerPack {
         val p = StickerPack("pack_" + System.currentTimeMillis(), name, publisher, animated)
         save(p)
         return p
@@ -107,7 +110,7 @@ class PackStore(private val ctx: Context) {
         } else {
             p.stickers.add(item)
         }
-        writeTray(p, p.stickers.first())
+        if (!p.trayCustom) writeTray(p, p.stickers.first())
         save(p)
     }
 
@@ -124,8 +127,12 @@ class PackStore(private val ctx: Context) {
 
     /** Uses [trayPng] as the tray icon if given, otherwise builds one from the first sticker. */
     fun finishImport(p: StickerPack, trayPng: ByteArray?) {
-        if (trayPng != null) File(dir(p.id), p.trayFile).writeBytes(trayPng)
-        else p.stickers.firstOrNull()?.let { writeTray(p, it) }
+        if (trayPng != null) {
+            File(dir(p.id), p.trayFile).writeBytes(trayPng)
+            p.trayCustom = true
+        } else if (!p.trayCustom) {
+            p.stickers.firstOrNull()?.let { writeTray(p, it) }
+        }
         save(p)
     }
 
@@ -134,12 +141,37 @@ class PackStore(private val ctx: Context) {
         File(d, s.file).delete()
         File(d, s.thumbFile).delete()
         p.stickers.remove(s)
-        p.stickers.firstOrNull()?.let { writeTray(p, it) }
+        if (!p.trayCustom) p.stickers.firstOrNull()?.let { writeTray(p, it) }
         save(p)
     }
 
     fun setTray(p: StickerPack, s: StickerItem) {
         writeTray(p, s)
+        p.trayCustom = true // an explicit choice: adding stickers later must not replace it
+        save(p)
+    }
+
+    /** Pack icon from any image (first frame): fitted into 96x96 with transparent padding. */
+    fun setTrayImage(p: StickerPack, src: Bitmap) {
+        val size = 96
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val s = minOf(size / src.width.toFloat(), size / src.height.toFloat())
+        val w = src.width * s
+        val h = src.height * s
+        android.graphics.Canvas(out).drawBitmap(
+            src, null, android.graphics.RectF((size - w) / 2, (size - h) / 2, (size + w) / 2, (size + h) / 2),
+            android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG),
+        )
+        File(dir(p.id), p.trayFile).outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        p.trayCustom = true
+        save(p)
+    }
+
+    fun setTrayFromUri(p: StickerPack, uri: android.net.Uri) = setTrayImage(p, MediaDecoder.load(ctx, uri).bitmaps[0])
+
+    fun update(p: StickerPack, name: String, publisher: String) {
+        if (name.isNotBlank()) p.name = name.trim().take(128)
+        if (publisher.isNotBlank()) p.publisher = publisher.trim().take(128)
         save(p)
     }
 

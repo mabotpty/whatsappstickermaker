@@ -58,6 +58,14 @@ class EditorActivity : AppCompatActivity() {
     private var composed: Array<Bitmap?> = arrayOfNulls(0)
     private var loaded = false
 
+    // After Remove BG: the original frames and the model's alpha masks, so the slider can reshape the cut-out
+    private var bgSrc: List<Bitmap>? = null
+    private var bgMasks: List<ByteArray>? = null
+    private var bgCms: List<ByteArray?>? = null
+    private lateinit var bgBar: View
+    private lateinit var sensSeek: SeekBar
+    private lateinit var sensLabel: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = PackStore(this)
@@ -89,6 +97,7 @@ class EditorActivity : AppCompatActivity() {
             textsChanged(rebuildBoxes = true, invalidateFrames = true)
         }
         view.onBeginStroke = {
+            clearBg()
             pushUndo()
             val copy = frames[0].copy(Bitmap.Config.ARGB_8888, true)
             frames = listOf(copy)
@@ -122,8 +131,27 @@ class EditorActivity : AppCompatActivity() {
             addView(seek, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) })
             addView(btn("Done") { setMode(EditorView.Mode.PREVIEW) })
         }
-        sub.addView(cropBar); sub.addView(brushBar)
-        cropBar.visibility = View.GONE; brushBar.visibility = View.GONE
+        sensLabel = TextView(this).apply { text = "0"; minWidth = dp(34); gravity = android.view.Gravity.CENTER }
+        sensSeek = SeekBar(this).apply {
+            max = 200
+            progress = 100 // -100 .. +100, centre = model output
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { sensLabel.text = (p - 100).toString() }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) { applySensitivity(progress - 100) }
+            })
+        }
+        bgBar = LinearLayout(this).apply {
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(12), 0, dp(4), 0)
+            addView(TextView(context).apply { text = "Keep less"; textSize = 12f })
+            addView(sensSeek, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(TextView(context).apply { text = "Keep more"; textSize = 12f })
+            addView(sensLabel)
+            addView(btn("Done") { clearBg() })
+        }
+        sub.addView(cropBar); sub.addView(brushBar); sub.addView(bgBar)
+        cropBar.visibility = View.GONE; brushBar.visibility = View.GONE; bgBar.visibility = View.GONE
         root.addView(sub)
 
         toolRow = HorizontalScrollView(this).apply {
@@ -220,6 +248,7 @@ class EditorActivity : AppCompatActivity() {
         cropBar.visibility = if (m == EditorView.Mode.CROP) View.VISIBLE else View.GONE
         brushBar.visibility = if (m == EditorView.Mode.ERASE || m == EditorView.Mode.RESTORE) View.VISIBLE else View.GONE
         toolRow.visibility = if (m == EditorView.Mode.PREVIEW) View.VISIBLE else View.GONE
+        bgBar.visibility = if (m == EditorView.Mode.PREVIEW && bgSrc != null) View.VISIBLE else View.GONE
         if (m == EditorView.Mode.PREVIEW) {
             composed = arrayOfNulls(frames.size)
             view.image = frames[0]
@@ -254,6 +283,7 @@ class EditorActivity : AppCompatActivity() {
     }
 
     private fun undoLast() {
+        clearBg()
         val s = undo.removeLastOrNull() ?: run { toast("Nothing to undo"); return }
         frames = s.frames; orig = s.orig; delays = s.delays
         refreshPreview()
@@ -261,6 +291,7 @@ class EditorActivity : AppCompatActivity() {
 
     /** Applies [op] to every frame (and the matching originals) off the main thread. */
     private fun geometry(msg: String, op: (Bitmap) -> Bitmap) {
+        clearBg()
         busy(msg, { _ ->
             val (nf, no) = withContext(Dispatchers.Default) {
                 val cache = IdentityHashMap<Bitmap, Bitmap>()
@@ -291,26 +322,62 @@ class EditorActivity : AppCompatActivity() {
 
     private fun removeBackground() {
         busy("Removing background... (first use downloads a small model)", { update ->
-            val out = withContext(Dispatchers.Default) {
+            val cms = ArrayList<ByteArray?>()
+            val masks = withContext(Dispatchers.Default) {
                 val seg = SubjectSegmentation.getClient(
                     SubjectSegmenterOptions.Builder().enableForegroundBitmap().build()
                 )
                 try {
-                    val cache = IdentityHashMap<Bitmap, Bitmap>()
+                    val cache = IdentityHashMap<Bitmap, ByteArray>()
+                    val cmCache = IdentityHashMap<Bitmap, ByteArray?>()
                     frames.mapIndexed { i, b ->
                         runOnUiThread { update("Removing background ${i + 1}/${frames.size}...") }
                         cache.getOrPut(b) {
-                            segment(seg, b) { runOnUiThread { update("Downloading background-removal model (first use only)...") } }
+                            val r = segment(seg, b) { runOnUiThread { update("Downloading background-removal model (first use only)...") } }
+                            cmCache[b] = Sensitivity.colourMaskOf(b)
+                            if (r === b) ByteArray(b.width * b.height) { -1 } else Sensitivity.maskOf(r)
                         }
+                        cms.add(cmCache[b])
+                        cache[b]!!
                     }
                 } finally {
                     seg.close()
                 }
             }
+            val src = frames
+            val out = withContext(Dispatchers.Default) { buildCutout(src, masks, cms, 0) }
             pushUndo()
+            bgSrc = src; bgMasks = masks; bgCms = cms
+            frames = out
+            sensSeek.progress = 100
+            refreshPreview()
+            bgBar.visibility = View.VISIBLE
+        })
+    }
+
+    private fun buildCutout(src: List<Bitmap>, masks: List<ByteArray>, cms: List<ByteArray?>, v: Int): List<Bitmap> {
+        val lut = Sensitivity.lut(v)
+        val weight = Sensitivity.colourWeight(v)
+        val cache = IdentityHashMap<ByteArray, Bitmap>()
+        return src.mapIndexed { i, b -> cache.getOrPut(masks[i]) { Sensitivity.apply(b, masks[i], cms[i], lut, weight) } }
+    }
+
+    private fun applySensitivity(v: Int) {
+        val src = bgSrc ?: return
+        val masks = bgMasks ?: return
+        val cms = bgCms ?: return
+        busy("Adjusting...", { _ ->
+            val out = withContext(Dispatchers.Default) { buildCutout(src, masks, cms, v) }
+            if (bgSrc !== src) return@busy // another edit happened meanwhile
             frames = out
             refreshPreview()
+            bgBar.visibility = View.VISIBLE
         })
+    }
+
+    private fun clearBg() {
+        bgSrc = null; bgMasks = null; bgCms = null
+        if (::bgBar.isInitialized) { bgBar.visibility = View.GONE; sensSeek.progress = 100 }
     }
 
     /** Google Play services fetches the model on first use; keep retrying while it downloads (up to ~2 min). */

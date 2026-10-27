@@ -34,6 +34,15 @@ class MainActivity : AppCompatActivity() {
     private var packs: List<StickerPack> = emptyList()
     private var pendingUri: Uri? = null
     private var pendingImport: Uri? = null
+    private var newPackIcon: Uri? = null
+    private var newPackIconPreview: ImageView? = null
+
+    private val pickPackIcon = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            newPackIcon = uri
+            newPackIconPreview?.setImageURI(uri)
+        }
+    }
 
     private val importPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) importPack(uri)
@@ -141,10 +150,30 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
         val name = EditText(this).apply { hint = "Pack name"; setSingleLine() }
         val pub = EditText(this).apply { hint = "Author"; setText(prefs.getString("publisher", "")); setSingleLine() }
-        val anim = Switch(this).apply { text = "Animated pack"; setPadding(0, dp(12), 0, 0) }
+        newPackIcon = null
+        val preview = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(0x11888888)
+        }
+        newPackIconPreview = preview
+        val chooseIcon = MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+            text = "Choose pack icon"
+            setOnClickListener { pickPackIcon.launch("image/*") }
+        }
+        val iconHint = TextView(this).apply { text = "Optional. Without one, the first sticker is used."; textSize = 12f }
+        val iconRow = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(12), 0, 0)
+            addView(preview, LinearLayout.LayoutParams(dp(64), dp(64)))
+            addView(
+                LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; addView(chooseIcon); addView(iconHint) },
+                LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(12) },
+            )
+        }
         val note = TextView(this).apply {
-            text = "WhatsApp packs are either all static or all animated. Add 3 to 30 stickers."
+            text = "Add 3 to 30 stickers. Static images are saved as a 2-frame animation, so they look static but WhatsApp accepts them."
             textSize = 12f
+            setPadding(0, dp(12), 0, 0)
         }
         val title = TextView(this).apply { text = "New sticker pack"; textSize = 20f; setPadding(0, 0, 0, dp(8)) }
         lateinit var dlg: AlertDialog
@@ -155,9 +184,13 @@ class MainActivity : AppCompatActivity() {
                 if (n.isEmpty()) { name.error = "Give the pack a name"; return@setOnClickListener }
                 val p = pub.text.toString().trim().ifEmpty { "Me" }
                 prefs.edit().putString("publisher", p).apply()
-                val pack = store.create(n.take(128), p.take(128), anim.isChecked)
-                dlg.dismiss()
-                open(pack)
+                busy("Creating pack...", { _ ->
+                    val pack = withContext(Dispatchers.IO) {
+                        store.create(n.take(128), p.take(128)).also { pk -> newPackIcon?.let { store.setTrayFromUri(pk, it) } }
+                    }
+                    dlg.dismiss()
+                    open(pack)
+                })
             }
         }
         val cancel = MaterialButton(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
@@ -173,7 +206,7 @@ class MainActivity : AppCompatActivity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(20), dp(24), dp(16))
-            addView(title); addView(name); addView(pub); addView(anim); addView(note); addView(buttons)
+            addView(title); addView(name); addView(pub); addView(iconRow); addView(note); addView(buttons)
         }
         dlg = AlertDialog.Builder(this).setView(box).create()
         dlg.show()
@@ -220,9 +253,9 @@ class MainActivity : AppCompatActivity() {
             val p = packs[position]
             h.title.text = p.name
             h.sub.text = "${p.stickers.size}/${PackStore.MAX_STICKERS} stickers" +
-                (if (p.animated) " - animated" else "") + (if (!p.isReady) " - needs ${PackStore.MIN_STICKERS - p.stickers.size} more" else "")
+                (if (p.animated) "" else " - static") + (if (!p.isReady) " - needs ${PackStore.MIN_STICKERS - p.stickers.size} more" else "")
             val tray = File(store.dir(p.id), p.trayFile)
-            h.img.setImageBitmap(if (tray.exists()) Thumbs.load(tray) else null)
+            h.img.setImageBitmap(if (tray.exists() && (p.stickers.isNotEmpty() || p.trayCustom)) Thumbs.load(tray) else null)
             h.row.setOnClickListener { open(p) }
         }
     }
