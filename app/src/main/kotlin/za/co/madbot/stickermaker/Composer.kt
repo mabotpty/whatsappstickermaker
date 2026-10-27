@@ -94,6 +94,46 @@ object Composer {
     }
 }
 
+/**
+ * WhatsApp wants every sticker in an animated pack to have 2+ frames (see docs/SPEC.md). A static image is saved as two
+ * frames that differ by a few pixels: identical frames would be merged back into one by the encoder.
+ */
+object FakeAnimation {
+    const val FRAME_DELAY_MS = 1000
+    /** Two frames this alike (mean abs channel difference on a 64px copy) count as a static sticker when loaded. */
+    const val MAX_DIFF = 4
+
+    /** Copy of [src] with 8 pixels near the top-left corner nudged by one level (invisible). */
+    fun nudged(src: Bitmap): Bitmap {
+        val b = src.copy(Bitmap.Config.ARGB_8888, true)
+        for (k in 0 until 8) {
+            val x = 4 + k * 3
+            val p = b.getPixel(x, 4)
+            val a = Color.alpha(p)
+            b.setPixel(
+                x, 4,
+                if (a == 0) Color.argb(1, 0, 0, 0)
+                else Color.argb(a, Color.red(p), Color.green(p), if (Color.blue(p) > 0) Color.blue(p) - 1 else 1),
+            )
+        }
+        return b
+    }
+
+    fun nearlyIdentical(a: Bitmap, b: Bitmap): Boolean {
+        if (a.width != b.width || a.height != b.height) return false
+        val pa = IntArray(64 * 64)
+        val pb = IntArray(64 * 64)
+        Bitmap.createScaledBitmap(a, 64, 64, true).getPixels(pa, 0, 64, 0, 0, 64, 64)
+        Bitmap.createScaledBitmap(b, 64, 64, true).getPixels(pb, 0, 64, 0, 0, 64, 64)
+        var sum = 0L
+        for (i in pa.indices) {
+            sum += Math.abs(Color.alpha(pa[i]) - Color.alpha(pb[i])) + Math.abs(Color.red(pa[i]) - Color.red(pb[i])) +
+                Math.abs(Color.green(pa[i]) - Color.green(pb[i])) + Math.abs(Color.blue(pa[i]) - Color.blue(pb[i]))
+        }
+        return sum / (pa.size * 4.0) <= MAX_DIFF
+    }
+}
+
 /** Encodes finished 512x512 frames, squeezing quality / frame count to fit WhatsApp's limits. */
 object StickerEncoder {
     const val STATIC_MAX = 100 * 1024

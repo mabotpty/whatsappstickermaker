@@ -182,16 +182,15 @@ class EditorActivity : AppCompatActivity() {
             fr = fr.take(1); dl = dl.take(1)
             toast("Static pack: using the first frame")
         }
-        if (pack.animated && !f.animated) {
-            showError("Animated pack", "This pack only takes animated stickers. Pick an animated GIF or WebP, or make a new static pack.")
-            finish()
-            return
-        }
+        if (pack.animated && !f.animated) toast("Animated pack: this image is saved as a 2-frame animation (it looks static)")
         frames = fr; orig = fr; delays = dl
         loaded = true
         refreshPreview()
-        hint.text = if (pack.animated) "Animated pack - ${frames.size} frames" else "Tip: tap Remove BG, then Erase/Restore to touch up"
+        hint.text = if (pack.animated) framesHint() else "Tip: tap Remove BG, then Erase/Restore to touch up"
     }
+
+    private fun framesHint() =
+        if (frames.size == 1) "Animated pack - saved as a 2-frame animation (looks static)" else "Animated pack - ${frames.size} frames"
 
     private fun refreshPreview() {
         composed = arrayOfNulls(frames.size)
@@ -231,7 +230,7 @@ class EditorActivity : AppCompatActivity() {
             EditorView.Mode.CROP -> "Drag the edges or corners, or drag inside to move"
             EditorView.Mode.ERASE -> "Paint over areas to erase"
             EditorView.Mode.RESTORE -> "Paint to bring back the original"
-            else -> if (pack.animated) "Animated pack - ${frames.size} frames" else ""
+            else -> if (pack.animated) framesHint() else ""
         }
     }
 
@@ -382,9 +381,15 @@ class EditorActivity : AppCompatActivity() {
         busy("Encoding sticker...", { update ->
             val (bytes, preview) = withContext(Dispatchers.Default) {
                 val job = coroutineContext[Job]
-                val comp = frames.map { Composer.compose(it, outline, texts) }
+                var comp = frames.map { Composer.compose(it, outline, texts) }
+                var dl = delays
+                if (pack.animated && comp.size == 1) {
+                    // static image in an animated pack: two near-identical frames so WhatsApp accepts it
+                    comp = listOf(comp[0], FakeAnimation.nudged(comp[0]))
+                    dl = listOf(FakeAnimation.FRAME_DELAY_MS, FakeAnimation.FRAME_DELAY_MS)
+                }
                 val bytes = if (pack.animated) {
-                    StickerEncoder.encodeAnimated(comp, delays, { job?.isCancelled == true }) { m -> update(m) }
+                    StickerEncoder.encodeAnimated(comp, dl, { job?.isCancelled == true }) { m -> update(m) }
                 } else {
                     StickerEncoder.encodeStatic(comp[0])
                 }

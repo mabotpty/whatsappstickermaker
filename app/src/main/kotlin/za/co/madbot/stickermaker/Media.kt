@@ -102,6 +102,8 @@ object MediaDecoder {
     private fun finishAnimated(frames: List<Bitmap>, delays: List<Int>): Frames {
         if (frames.isEmpty()) error("No frames found")
         if (frames.size == 1) return Frames(frames, listOf(100))
+        // Two near-identical frames are a static sticker disguised as an animation (docs/SPEC.md): load it as static.
+        if (frames.size == 2 && FakeAnimation.nearlyIdentical(frames[0], frames[1])) return Frames(listOf(frames[0]), listOf(100))
         // Browsers treat tiny delays as 100 ms; do the same.
         val fixed = delays.map { if (it <= 10) 100 else it }
         val step = ceil(frames.size / MAX_FRAMES.toDouble()).toInt().coerceAtLeast(1)

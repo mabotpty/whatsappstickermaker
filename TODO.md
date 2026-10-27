@@ -26,7 +26,9 @@ To check on the phone:
 
 ## Parity with the desktop app (`whatsappstickermaker-desktop`, see docs/SPEC.md)
 Shared: limits, pack format, `.wastickers` import/export, editing tools, encoding strategy, UX conventions.
-Only on desktop for now: multi-file add (batch), eraser zoom/pan (= the two Features above), faster encodes.
+Only on desktop for now: multi-file add (batch), eraser zoom/pan (= the two Features above), drag stickers to reorder, faster encodes.
+- [ ] Reorder stickers in a pack (desktop has it: WhatsApp shows them in this order)
 Only on Android: Add to WhatsApp / WhatsApp Business, share-sheet import.
 Neither has video input yet.
+Done on both: static images in an animated pack are saved as 2-frame animations (docs/SPEC.md).
 When a rule in docs/SPEC.md changes, change it in both repos.
