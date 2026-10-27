@@ -28,3 +28,7 @@ Background removal downloads a model through Google Play services the first time
 Signs with `release.keystore` using `keystore.properties` (both in the project root, git-ignored; copy them to a safe place).
 Without the keystore the release build is unsigned. The release APK is signed with a different key than debug builds,
 so installing it over a debug install needs an uninstall first (export your packs first: pack screen > Export).
+
+## Desktop companion
+A Windows desktop app (`whatsappstickermaker-desktop`) makes stickers on the PC and exports `.wastickers` files,
+which this app imports. Both follow [docs/SPEC.md](docs/SPEC.md).

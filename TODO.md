@@ -23,3 +23,10 @@ To check on the phone:
 - [ ] Bundled offline background removal as a fallback (people only)
 - [ ] Batch import (pick several images at once)
 - [x] Signed release build: `./gradlew.bat assembleRelease` -> `app/build/outputs/apk/release/app-release.apk`, copied to `dist/StickerMaker-release.apk`. Key: `release.keystore` + `keystore.properties` in the project root (git-ignored). BACK THESE UP: without them future updates can't install over this version.
+
+## Parity with the desktop app (`whatsappstickermaker-desktop`, see docs/SPEC.md)
+Shared: limits, pack format, `.wastickers` import/export, editing tools, encoding strategy, UX conventions.
+Only on desktop for now: multi-file add (batch), eraser zoom/pan (= the two Features above), faster encodes.
+Only on Android: Add to WhatsApp / WhatsApp Business, share-sheet import.
+Neither has video input yet.
+When a rule in docs/SPEC.md changes, change it in both repos.
