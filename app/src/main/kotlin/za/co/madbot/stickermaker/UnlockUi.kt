@@ -70,7 +70,7 @@ class Licensing(private val activity: AppCompatActivity) {
         val box = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(activity.dp(24), activity.dp(20), activity.dp(24), activity.dp(16))
-            addView(TextView(activity).apply { text = "Unlock Sticker Maker"; textSize = 20f; setPadding(0, 0, 0, activity.dp(8)) })
+            addView(TextView(activity).apply { text = "Unlock StikBot"; textSize = 20f; setPadding(0, 0, 0, activity.dp(8)) })
             addView(body); addView(price); addView(buttons)
         }
         dlg = AlertDialog.Builder(activity).setView(box).create()
@@ -83,7 +83,7 @@ class Licensing(private val activity: AppCompatActivity) {
 
     /** Who is unlocked, and how to use the same account on the desktop. */
     fun showStatus(onChanged: () -> Unit = {}) {
-        val b = AlertDialog.Builder(activity).setTitle("Sticker Maker unlocked")
+        val b = AlertDialog.Builder(activity).setTitle("StikBot unlocked")
             .setMessage(
                 "Signed in as ${manager.email ?: "your Google account"}.\n\nTo use the Windows desktop app, sign in there with the same Google account. " +
                     "Only one computer can be signed in at a time: signing in on another one signs this one out.",

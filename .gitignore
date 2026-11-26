@@ -10,3 +10,6 @@ dist/
 release.keystore
 keystore.properties
 *.jks
+
+# Intermediate store-asset work files (sample art, seed packs, test photo)
+store/work/

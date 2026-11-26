@@ -26,7 +26,7 @@ import android.view.MenuItem
 import android.widget.FrameLayout
 import java.io.File
 
-/** Lists sticker packs. Also receives images shared from other apps ("Share > Sticker Maker"). */
+/** Lists sticker packs. Also receives images shared from other apps ("Share > StikBot Sticker Maker"). */
 class MainActivity : AppCompatActivity() {
     private lateinit var store: PackStore
     private lateinit var list: RecyclerView
@@ -57,7 +57,7 @@ class MainActivity : AppCompatActivity() {
 
         val root = FrameLayout(this)
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val bar = MaterialToolbar(this).apply { title = "Sticker Maker" }
+        val bar = MaterialToolbar(this).apply { title = "StikBot" }
         setSupportActionBar(bar)
         col.addView(bar)
         list = RecyclerView(this).apply {
@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
-        menu.findItem(3)?.title = if (licensing.unlocked) "Licence" else "Unlock Sticker Maker"
+        menu.findItem(3)?.title = if (licensing.unlocked) "Licence" else "Unlock StikBot"
         return super.onPrepareOptionsMenu(menu)
     }
 
