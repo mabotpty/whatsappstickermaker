@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private var newPackIcon: Uri? = null
     private var newPackIconPreview: ImageView? = null
     private lateinit var licensing: Licensing
+    private lateinit var adBox: FrameLayout
 
     private val pickPackIcon = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -67,6 +68,8 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, 0, 0, dp(16))
         }
         col.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
+        adBox = FrameLayout(this).apply { visibility = View.GONE }
+        col.addView(adBox, LinearLayout.LayoutParams(-1, -2))
         root.addView(col)
         empty = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -100,8 +103,8 @@ class MainActivity : AppCompatActivity() {
         if (item.itemId == 1) newPackDialog()
         if (item.itemId == 2) importPicker.launch(arrayOf("*/*"))
         if (item.itemId == 3) {
-            if (licensing.unlocked) licensing.showStatus { invalidateOptionsMenu(); refresh() }
-            else licensing.showUnlock("Unlock the full app.") { invalidateOptionsMenu(); refresh() }
+            if (licensing.unlocked) licensing.showStatus { invalidateOptionsMenu(); refresh(); Ads.attach(this, adBox, licensing.unlocked) }
+            else licensing.showUnlock("Unlock the full app.") { invalidateOptionsMenu(); refresh(); Ads.attach(this, adBox, licensing.unlocked) }
         }
         return true
     }
@@ -109,7 +112,7 @@ class MainActivity : AppCompatActivity() {
     /** The free version holds one pack; a refused action explains why and offers the unlock. */
     private fun packAllowed(): Boolean {
         if (Gate.canAddPack(licensing.unlocked, store.list().size)) return true
-        licensing.showUnlock("The free version has one sticker pack.") { invalidateOptionsMenu() }
+        licensing.showUnlock("The free version has one sticker pack.") { invalidateOptionsMenu(); Ads.attach(this, adBox, licensing.unlocked) }
         return false
     }
 
@@ -134,11 +137,13 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
-        licensing.recheck { invalidateOptionsMenu() }
+        licensing.recheck { invalidateOptionsMenu(); Ads.attach(this, adBox, licensing.unlocked) }
+        Ads.attach(this, adBox, licensing.unlocked)
         pendingImport?.let { pendingImport = null; importPack(it) }
     }
 
     override fun onDestroy() {
+        Ads.detach(adBox)
         licensing.close()
         super.onDestroy()
     }

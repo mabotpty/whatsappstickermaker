@@ -46,6 +46,11 @@ class LicenceTest {
         assertFalse(Gate.canRemoveBackground(false))
     }
 
+    @Test fun adsOnlyInTheFreeVersion() {
+        assertTrue(Gate.showAds(false))
+        assertFalse(Gate.showAds(true))
+    }
+
     @Test fun unlockedHasNoLimits() {
         assertTrue(Gate.canAddPack(true, 1))
         assertTrue(Gate.canAddPack(true, 50))

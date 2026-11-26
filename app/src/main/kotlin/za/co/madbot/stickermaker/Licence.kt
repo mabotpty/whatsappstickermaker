@@ -14,6 +14,7 @@ object Gate {
 
     fun canAddPack(unlocked: Boolean, packCount: Int) = unlocked || packCount < FREE_PACKS
     fun canRemoveBackground(unlocked: Boolean) = unlocked
+    fun showAds(unlocked: Boolean) = !unlocked
 }
 
 /** Why something failed, in words that can be shown to the person. */

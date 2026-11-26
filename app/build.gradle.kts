@@ -17,6 +17,10 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 val fakeLicence = !project.hasProperty("realLicence")
+// Ads: Google's public test ids until the real AdMob ids are in local.properties (admob.appId, admob.bannerUnitId) and the build uses -PrealAds.
+val realAds = project.hasProperty("realAds")
+val admobAppId = if (realAds) localProps.getProperty("admob.appId", "") else "ca-app-pub-3940256099942544~3347511713"
+val bannerUnit = if (realAds) localProps.getProperty("admob.bannerUnitId", "") else "ca-app-pub-3940256099942544/9214589741"
 
 android {
     namespace = "za.co.madbot.stickermaker"
@@ -32,6 +36,8 @@ android {
         manifestPlaceholders["contentProviderAuthority"] = authority
         buildConfigField("String", "CONTENT_PROVIDER_AUTHORITY", "\"$authority\"")
         buildConfigField("boolean", "FAKE_LICENCE", fakeLicence.toString())
+        buildConfigField("String", "BANNER_AD_UNIT", "\"$bannerUnit\"")
+        manifestPlaceholders["admobAppId"] = admobAppId
         buildConfigField("String", "LICENCE_BASE_URL", "\"https://crm.madbot.co.za/api/licence/v1\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProps.getProperty("google.webClientId", "")}\"")
         ndk {
@@ -80,6 +86,7 @@ android {
 tasks.matching { it.name == "bundleRelease" }.configureEach {
     doFirst {
         if (fakeLicence) throw GradleException("bundleRelease needs -PrealLicence: this build still has the fake licence, which unlocks for free.")
+        if (!realAds || admobAppId.isBlank() || bannerUnit.isBlank()) throw GradleException("bundleRelease needs -PrealAds with admob.appId and admob.bannerUnitId in local.properties: this build would show test ads.")
     }
 }
 
@@ -93,6 +100,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.2")
     implementation("com.android.billingclient:billing-ktx:8.0.0")
+    implementation("com.google.android.gms:play-services-ads:24.4.0")
     implementation("androidx.credentials:credentials:1.5.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")

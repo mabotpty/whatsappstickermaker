@@ -12,6 +12,11 @@
         android:theme="@style/AppTheme"
         tools:ignore="GoogleAppIndexingWarning">
 
+        <!-- AdMob app id (Google's test id unless built with -PrealAds). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}" />
+
         <!-- Downloads the ML Kit subject segmentation model at install time when possible. -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"

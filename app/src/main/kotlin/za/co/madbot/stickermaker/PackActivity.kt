@@ -8,6 +8,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.ViewGroup
 import android.widget.EditText
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -34,6 +35,8 @@ class PackActivity : AppCompatActivity() {
     private lateinit var pack: StickerPack
     private lateinit var grid: RecyclerView
     private lateinit var info: TextView
+    private lateinit var adBox: FrameLayout
+    private lateinit var addButton: ExtendedFloatingActionButton
 
     // One image opens the editor; several are added automatically (fitted, default emoji) and can be edited afterwards.
     private val pickImages = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
@@ -120,17 +123,17 @@ class PackActivity : AppCompatActivity() {
             }
         }).attachToRecyclerView(grid)
         col.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
+        adBox = FrameLayout(this).apply { visibility = View.GONE }
+        col.addView(adBox, LinearLayout.LayoutParams(-1, -2))
         root.addView(col)
-        root.addView(
-            ExtendedFloatingActionButton(this).apply {
-                text = "Add sticker"
-                setOnClickListener {
-                    if (pack.stickers.size >= PackStore.MAX_STICKERS) Toast.makeText(context, "Pack is full", Toast.LENGTH_SHORT).show()
-                    else pickImages.launch("image/*")
-                }
-            },
-            FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(16), dp(16)) },
-        )
+        addButton = ExtendedFloatingActionButton(this).apply {
+            text = "Add sticker"
+            setOnClickListener {
+                if (pack.stickers.size >= PackStore.MAX_STICKERS) Toast.makeText(context, "Pack is full", Toast.LENGTH_SHORT).show()
+                else pickImages.launch("image/*")
+            }
+        }
+        root.addView(addButton, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(16), dp(16)) })
         setContentView(root)
     }
 
@@ -144,6 +147,16 @@ class PackActivity : AppCompatActivity() {
             else "${pack.stickers.size}/${PackStore.MAX_STICKERS} stickers - add at least ${PackStore.MIN_STICKERS} to enable WhatsApp."
         grid.adapter?.notifyDataSetChanged()
         invalidateOptionsMenu()
+        Ads.attach(this, adBox, PrefsLicenceStore(this).unlocked) { h ->
+            // keep the Add sticker button above the banner
+            (addButton.layoutParams as FrameLayout.LayoutParams).bottomMargin = dp(16) + h
+            addButton.requestLayout()
+        }
+    }
+
+    override fun onDestroy() {
+        Ads.detach(adBox)
+        super.onDestroy()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
