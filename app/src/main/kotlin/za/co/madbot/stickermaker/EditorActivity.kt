@@ -257,8 +257,8 @@ class EditorActivity : AppCompatActivity() {
         }
         hint.text = when (m) {
             EditorView.Mode.CROP -> "Drag the edges or corners, or drag inside to move"
-            EditorView.Mode.ERASE -> "Paint over areas to erase"
-            EditorView.Mode.RESTORE -> "Paint to bring back the original"
+            EditorView.Mode.ERASE -> "Paint to erase. Pinch to zoom, two fingers to pan"
+            EditorView.Mode.RESTORE -> "Paint to bring back the original. Pinch to zoom, two fingers to pan"
             else -> if (pack.animated) framesHint() else ""
         }
     }

@@ -13,6 +13,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import kotlin.math.abs
 import kotlin.math.max
@@ -31,6 +32,7 @@ class EditorView(context: Context) : View(context) {
         set(v) {
             field = v
             if (v == Mode.CROP) resetCrop()
+            resetZoom()
             invalidate()
         }
     var image: Bitmap? = null
@@ -101,12 +103,48 @@ class EditorView(context: Context) : View(context) {
     private var touchY = -1f
     private var strokeBitmap: Bitmap? = null
 
-    private fun layoutImage(b: Bitmap) {
+    // ---- zoom (brush modes only): pinch to zoom, two fingers to pan, one finger paints ----
+    private val zs = ZoomState()
+    private var multiTouch = false
+    private var lastFocusX = 0f
+    private var lastFocusY = 0f
+
+    private fun resetZoom() = zs.reset()
+
+    private val scaler = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScaleBegin(d: ScaleGestureDetector): Boolean {
+            lastFocusX = d.focusX; lastFocusY = d.focusY
+            return true
+        }
+
+        override fun onScale(d: ScaleGestureDetector): Boolean {
+            val b = image ?: return true
+            val base = baseRect(b)
+            zs.scaleBy(
+                d.scaleFactor, d.focusX, d.focusY, d.focusX - lastFocusX, d.focusY - lastFocusY,
+                dst.left, dst.top, dst.width(), dst.height(), base.width(), base.height(), width.toFloat(), height.toFloat(), dp(40f),
+            )
+            lastFocusX = d.focusX; lastFocusY = d.focusY
+            invalidate()
+            return true
+        }
+    })
+
+    private fun baseRect(b: Bitmap): RectF {
         val pad = dp(14f)
         val s = min((width - 2 * pad) / b.width, (height - 2 * pad) / b.height)
         val w = b.width * s
         val h = b.height * s
-        dst.set((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2)
+        return RectF((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2)
+    }
+
+    private fun layoutImage(b: Bitmap) {
+        val base = baseRect(b)
+        val w = base.width() * zs.zoom
+        val h = base.height() * zs.zoom
+        val cx = width / 2f + zs.panX
+        val cy = height / 2f + zs.panY
+        dst.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
     }
 
     private fun layoutSquare() {
@@ -160,7 +198,7 @@ class EditorView(context: Context) : View(context) {
                 canvas.drawCircle(x, y, hr, handle)
             }
         } else if (touchX >= 0) {
-            val radius = brushFraction * max(b.width, b.height) * (dst.width() / b.width) / 2
+            val radius = brushFraction * max(b.width, b.height) / zs.zoom * (dst.width() / b.width) / 2
             canvas.drawCircle(touchX, touchY, radius, brushRing)
         }
     }
@@ -265,7 +303,22 @@ class EditorView(context: Context) : View(context) {
         val s = dst.width() / img.width
         fun ix(x: Float) = (x - dst.left) / s
         fun iy(y: Float) = (y - dst.top) / s
-        val strokeW = brushFraction * max(img.width, img.height)
+        val strokeW = brushFraction * max(img.width, img.height) / zs.zoom
+        scaler.onTouchEvent(e)
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> multiTouch = false
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // A second finger turns the gesture into zoom/pan: stop painting.
+                multiTouch = true
+                strokeBitmap = null
+                touchX = -1f; touchY = -1f
+            }
+        }
+        if (multiTouch) {
+            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) multiTouch = false
+            invalidate()
+            return
+        }
         touchX = e.x; touchY = e.y
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
