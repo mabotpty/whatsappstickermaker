@@ -23,6 +23,12 @@ data class StickerPack(
     var trayCustom: Boolean = false,
 ) {
     val isReady get() = stickers.size >= PackStore.MIN_STICKERS
+
+    /**
+     * The identifier WhatsApp sees. It changes with every saved version because WhatsApp never refreshes a pack it
+     * already has (it just says "already added"), so a changed pack has to look like a new one.
+     */
+    val waId get() = if (WhatsApp.VERSIONED_ID) "$id.v$version" else id
 }
 
 /** Packs live in filesDir/packs/<id>/{pack.json, tray.png, s*.webp, s*.png (thumbnails)}. */
@@ -42,6 +48,9 @@ class PackStore(private val ctx: Context) {
             .mapNotNull { read(it.name) }.sortedBy { it.id }
 
     fun get(id: String): StickerPack? = if (ID_RE.matches(id)) read(id) else null
+
+    /** Looks a pack up by the identifier given to WhatsApp (`<id>.v<version>`); older versions resolve to the current pack. */
+    fun getByWaId(waId: String): StickerPack? = get(waId.replace(Regex("\\.v\\d+$"), ""))
 
     private fun read(id: String): StickerPack? {
         val f = File(dir(id), "pack.json")

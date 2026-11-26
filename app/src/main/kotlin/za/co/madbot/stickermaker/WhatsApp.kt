@@ -9,6 +9,12 @@ object WhatsApp {
     const val CONSUMER = "com.whatsapp"
     const val BUSINESS = "com.whatsapp.w4b"
 
+    /**
+     * Experiment switch. false: keep the same identifier and always send the intent, hoping WhatsApp overwrites the pack
+     * (image_data_version is bumped on every save). true: give each saved version a new identifier so it is added as a new pack.
+     */
+    const val VERSIONED_ID = false
+
     private fun installed(pm: PackageManager, pkg: String) =
         try {
             pm.getApplicationInfo(pkg, 0).enabled
@@ -39,13 +45,13 @@ object WhatsApp {
             why("WhatsApp is not installed.")
             return null
         }
-        val pending = targets.filter { !isWhitelisted(ctx, it, pack.id) }
+        val pending = if (VERSIONED_ID) targets.filter { !isWhitelisted(ctx, it, pack.waId) } else targets
         if (pending.isEmpty()) {
             why("This pack is already added to WhatsApp.")
             return null
         }
         val intent = Intent("com.whatsapp.intent.action.ENABLE_STICKER_PACK")
-            .putExtra("sticker_pack_id", pack.id)
+            .putExtra("sticker_pack_id", pack.waId)
             .putExtra("sticker_pack_authority", BuildConfig.CONTENT_PROVIDER_AUTHORITY)
             .putExtra("sticker_pack_name", pack.name)
         return if (pending.size == 1) intent.setPackage(pending[0])

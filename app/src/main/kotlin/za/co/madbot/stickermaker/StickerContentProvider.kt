@@ -29,7 +29,7 @@ class StickerContentProvider : ContentProvider() {
         return when (seg.firstOrNull()) {
             "metadata" ->
                 if (seg.size == 1) packInfo(uri, store.list().filter { it.isReady })
-                else packInfo(uri, listOfNotNull(store.get(seg[1])))
+                else packInfo(uri, listOfNotNull(store.getByWaId(seg[1])))
             "stickers" -> stickers(uri, seg.getOrNull(1))
             else -> throw IllegalArgumentException("Unknown URI: $uri")
         }
@@ -48,7 +48,7 @@ class StickerContentProvider : ContentProvider() {
         packs.forEach {
             c.addRow(
                 arrayOf<Any>(
-                    it.id, it.name, it.publisher, it.trayFile, "", "", "", "", "", "",
+                    it.waId, it.name, it.publisher, it.trayFile, "", "", "", "", "", "",
                     it.version.toString(), 0, if (it.animated) 1 else 0,
                 )
             )
@@ -59,7 +59,7 @@ class StickerContentProvider : ContentProvider() {
 
     private fun stickers(uri: Uri, id: String?): Cursor {
         val c = MatrixCursor(arrayOf("sticker_file_name", "sticker_emoji", "sticker_accessibility_text"))
-        id?.let { store.get(it) }?.stickers?.forEach {
+        id?.let { store.getByWaId(it) }?.stickers?.forEach {
             c.addRow(arrayOf<Any>(it.file, it.emojis.joinToString(","), ""))
         }
         c.setNotificationUri(context!!.contentResolver, uri)
@@ -72,9 +72,9 @@ class StickerContentProvider : ContentProvider() {
         val id = seg[1]
         val name = seg[2]
         if (!PackStore.ID_RE.matches(name)) return null
-        val pack = store.get(id) ?: return null
+        val pack = store.getByWaId(id) ?: return null
         if (name != pack.trayFile && pack.stickers.none { it.file == name }) return null
-        val f = File(store.dir(id), name)
+        val f = File(store.dir(pack.id), name)
         if (!f.exists()) return null
         return AssetFileDescriptor(ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY), 0, f.length())
     }
