@@ -73,5 +73,5 @@ packs still work and are labelled "static". Name and author can be edited afterw
 New pack: a top-bar action plus a button in the empty state, never a floating button. The dialog has a large filled primary
 "Create pack" button and an inline error when the name is empty. No prompts while saving a sticker; the emoji is changed
 afterwards from the sticker's menu (Edit, Change emoji, Use as tray icon, Delete). Progress dialogs always have a Cancel button.
-Desktop only: drag and drop (images onto the pack, a visible drop tile, drag stickers to reorder). Android has no reorder yet.
+Reorder: drag a sticker to move it (desktop: drag; Android: long-press then drag); WhatsApp shows stickers in pack order, and an automatic pack icon follows the first sticker. Desktop only: drag and drop of images onto the pack and a visible drop tile.
 Adding to WhatsApp happens on the phone only: the desktop app exports `.wastickers`, the Android app imports it.

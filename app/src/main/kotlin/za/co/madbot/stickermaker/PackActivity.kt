@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
@@ -79,6 +80,32 @@ class PackActivity : AppCompatActivity() {
             clipToPadding = false
             setPadding(dp(8), 0, dp(8), dp(96))
         }
+        // Long-press a sticker and drag it to reorder; the order is saved when it is dropped.
+        ItemTouchHelper(object : ItemTouchHelper.SimpleCallback(
+            ItemTouchHelper.UP or ItemTouchHelper.DOWN or ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT, 0,
+        ) {
+            private var moved = false
+
+            override fun onMove(rv: RecyclerView, from: RecyclerView.ViewHolder, to: RecyclerView.ViewHolder): Boolean {
+                val a = from.bindingAdapterPosition
+                val b = to.bindingAdapterPosition
+                if (a < 0 || b < 0) return false
+                pack.stickers.add(b, pack.stickers.removeAt(a))
+                rv.adapter?.notifyItemMoved(a, b)
+                moved = true
+                return true
+            }
+
+            override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
+
+            override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
+                super.clearView(rv, vh)
+                if (moved) {
+                    moved = false
+                    store.saveOrder(pack)
+                }
+            }
+        }).attachToRecyclerView(grid)
         col.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
         root.addView(col)
         root.addView(

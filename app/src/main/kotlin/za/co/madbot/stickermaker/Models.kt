@@ -184,6 +184,12 @@ class PackStore(private val ctx: Context) {
         save(p)
     }
 
+    /** Saves the current sticker order (WhatsApp shows stickers in this order); the auto tray follows the first sticker. */
+    fun saveOrder(p: StickerPack) {
+        if (!p.trayCustom) p.stickers.firstOrNull()?.let { writeTray(p, it) }
+        save(p)
+    }
+
     fun updateEmojis(p: StickerPack, s: StickerItem, emojis: List<String>) {
         val i = p.stickers.indexOf(s)
         if (i >= 0) p.stickers[i] = s.copy(emojis = emojis)
