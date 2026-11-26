@@ -320,7 +320,18 @@ class EditorActivity : AppCompatActivity() {
         geometry("Cropping...") { b -> Bitmap.createBitmap(b, r.left, r.top, r.width(), r.height()) }
     }
 
+    private var licensing: Licensing? = null
+
+    override fun onDestroy() {
+        licensing?.close()
+        super.onDestroy()
+    }
+
     private fun removeBackground() {
+        if (!Gate.canRemoveBackground(PrefsLicenceStore(this).unlocked)) {
+            (licensing ?: Licensing(this).also { licensing = it }).showUnlock("Background removal is part of the unlock.")
+            return
+        }
         busy("Removing background... (first use downloads a small model)", { update ->
             val cms = ArrayList<ByteArray?>()
             val masks = withContext(Dispatchers.Default) {

@@ -10,6 +10,14 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Licence: until the real Google and Play keys exist every build uses fake sign-in, billing and server answers (anyone could unlock for free).
+// Build with -PrealLicence once local.properties has google.webClientId. The Play bundle refuses to build with the fakes on.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val fakeLicence = !project.hasProperty("realLicence")
+
 android {
     namespace = "za.co.madbot.stickermaker"
     compileSdk = 36
@@ -23,6 +31,9 @@ android {
         val authority = "$applicationId.stickercontentprovider"
         manifestPlaceholders["contentProviderAuthority"] = authority
         buildConfigField("String", "CONTENT_PROVIDER_AUTHORITY", "\"$authority\"")
+        buildConfigField("boolean", "FAKE_LICENCE", fakeLicence.toString())
+        buildConfigField("String", "LICENCE_BASE_URL", "\"https://crm.madbot.co.za/api/licence/v1\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${localProps.getProperty("google.webClientId", "")}\"")
         ndk {
             abiFilters += listOf("arm64-v8a")
             // -PwithX86 adds the emulator ABI for testing on a PC
@@ -66,6 +77,12 @@ android {
     }
 }
 
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        if (fakeLicence) throw GradleException("bundleRelease needs -PrealLicence: this build still has the fake licence, which unlocks for free.")
+    }
+}
+
 dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.13.0")
@@ -75,5 +92,10 @@ dependencies {
     implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.2")
+    implementation("com.android.billingclient:billing-ktx:8.0.0")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

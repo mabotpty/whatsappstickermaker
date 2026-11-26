@@ -36,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingImport: Uri? = null
     private var newPackIcon: Uri? = null
     private var newPackIconPreview: ImageView? = null
+    private lateinit var licensing: Licensing
 
     private val pickPackIcon = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -51,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = PackStore(this)
+        licensing = Licensing(this)
         handleShare(intent)
 
         val root = FrameLayout(this)
@@ -85,13 +87,30 @@ class MainActivity : AppCompatActivity() {
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menu.add(0, 1, 0, "New pack").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS)
         menu.add(0, 2, 1, "Import pack (.wastickers)").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
+        menu.add(0, 3, 2, "Unlock").setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER)
         return true
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        menu.findItem(3)?.title = if (licensing.unlocked) "Licence" else "Unlock Sticker Maker"
+        return super.onPrepareOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         if (item.itemId == 1) newPackDialog()
         if (item.itemId == 2) importPicker.launch(arrayOf("*/*"))
+        if (item.itemId == 3) {
+            if (licensing.unlocked) licensing.showStatus { invalidateOptionsMenu(); refresh() }
+            else licensing.showUnlock("Unlock the full app.") { invalidateOptionsMenu(); refresh() }
+        }
         return true
+    }
+
+    /** The free version holds one pack; a refused action explains why and offers the unlock. */
+    private fun packAllowed(): Boolean {
+        if (Gate.canAddPack(licensing.unlocked, store.list().size)) return true
+        licensing.showUnlock("The free version has one sticker pack.") { invalidateOptionsMenu() }
+        return false
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -115,10 +134,17 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        licensing.recheck { invalidateOptionsMenu() }
         pendingImport?.let { pendingImport = null; importPack(it) }
     }
 
+    override fun onDestroy() {
+        licensing.close()
+        super.onDestroy()
+    }
+
     private fun importPack(uri: Uri) {
+        if (!packAllowed()) return
         var result: ImportResult? = null
         busy("Importing pack...", { _ ->
             result = withContext(Dispatchers.IO) { PackImporter.import(this@MainActivity, uri, store) }
@@ -147,6 +173,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Custom dialog: the primary action is a big filled button, so it cannot be mistaken for anything behind it. */
     private fun newPackDialog() {
+        if (!packAllowed()) return
         val prefs = getSharedPreferences("prefs", MODE_PRIVATE)
         val name = EditText(this).apply { hint = "Pack name"; setSingleLine() }
         val pub = EditText(this).apply { hint = "Author"; setText(prefs.getString("publisher", "")); setSingleLine() }
