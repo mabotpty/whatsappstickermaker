@@ -35,8 +35,21 @@ class PackActivity : AppCompatActivity() {
     private lateinit var grid: RecyclerView
     private lateinit var info: TextView
 
-    private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) edit(uri, null)
+    // One image opens the editor; several are added automatically (fitted, default emoji) and can be edited afterwards.
+    private val pickImages = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        when {
+            uris.isEmpty() -> {}
+            uris.size == 1 -> edit(uris[0], null)
+            else -> {
+                var result: BatchAdd.Result? = null
+                busy("Adding ${uris.size} images...", { update ->
+                    result = BatchAdd.addAll(this@PackActivity, store, pack, uris, update)
+                }, { _ ->
+                    onResume()
+                    result?.let { AlertDialog.Builder(this).setTitle("Add stickers").setMessage(it.summary()).setPositiveButton("OK", null).show() }
+                })
+            }
+        }
     }
     private val pickIcon = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -113,7 +126,7 @@ class PackActivity : AppCompatActivity() {
                 text = "Add sticker"
                 setOnClickListener {
                     if (pack.stickers.size >= PackStore.MAX_STICKERS) Toast.makeText(context, "Pack is full", Toast.LENGTH_SHORT).show()
-                    else pickImage.launch("image/*")
+                    else pickImages.launch("image/*")
                 }
             },
             FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(16), dp(16)) },
