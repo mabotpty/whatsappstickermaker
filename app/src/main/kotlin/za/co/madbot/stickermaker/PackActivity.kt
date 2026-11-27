@@ -135,6 +135,7 @@ class PackActivity : AppCompatActivity() {
         }
         root.addView(addButton, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(16), dp(16)) })
         setContentView(root)
+        fitSystemBars(root, bar)
     }
 
     override fun onResume() {

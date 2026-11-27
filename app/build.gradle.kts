@@ -29,7 +29,7 @@ android {
     defaultConfig {
         applicationId = "za.co.madbot.stickermaker"
         minSdk = 28
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
         val authority = "$applicationId.stickercontentprovider"

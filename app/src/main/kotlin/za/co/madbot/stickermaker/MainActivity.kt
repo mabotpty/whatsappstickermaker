@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         }
         root.addView(empty, FrameLayout.LayoutParams(-1, -1))
         setContentView(root)
+        fitSystemBars(root, bar)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {

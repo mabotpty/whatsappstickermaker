@@ -173,6 +173,7 @@ class EditorActivity : AppCompatActivity() {
         }
         root.addView(toolRow)
         setContentView(root)
+        fitSystemBars(root, bar)
     }
 
     private fun btn(label: String, click: () -> Unit) = MaterialButton(this, null, androidx.appcompat.R.attr.borderlessButtonStyle).apply {
